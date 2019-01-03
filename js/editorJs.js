@@ -19,6 +19,9 @@
     let eOptions,
         container = $(this),
         editcontainer = null,
+        editcodecontainer = null,
+        lastchanges = [],
+        maxchanges = 50,
         currentRange = null,
         supportedLanguages = ["fr", "en"],
         defaultLanguage = "en",
@@ -74,9 +77,23 @@
         return messages[code][eOptions.lang];
     }
 
+    function recordChange(){
+        if(editcontainer.is(":visible")){
+            lastchanges.push(editcontainer.html());
+        }else{
+            lastchanges.push(editcodecontainer.text());
+        }
+
+        if(lastchanges.length >= maxchanges){
+            lastchanges.shift();
+        }
+    }
+
     function initListeners(){
         let panel = container.find(".editor-panel");
         let editor = container.find(".editor-body");
+        let timeoutID;
+        let i;
 
         /*
          * SAVE
@@ -102,6 +119,30 @@
 
         panel.find(".editor-reload").on("click", function(){
 
+        });
+
+        panel.find(".editor-code").on("click", function(){
+
+            editcodecontainer.text(editcontainer.html());
+
+            panel.find(".buttons-styles").hide();
+            editcodecontainer.show();
+            editcontainer.hide();
+
+            $(this).next().show();
+            $(this).hide();
+        });
+
+        panel.find(".editor-classic").on("click", function(){
+
+            editcontainer.html(editcodecontainer.text());
+
+            panel.find(".buttons-styles").show();
+            editcontainer.show();
+            editcodecontainer.hide();
+
+            $(this).prev().show();
+            $(this).hide();
         });
 
         /*
@@ -169,46 +210,61 @@
         panel.find(".editor-header").on("click", function(){
 
         });
+
+        /*
+         * EDITOR
+         */
+        editor.on("keyup", function(){
+            clearTimeout(timeoutID );
+            timeoutID = setTimeout(recordChange, 1000);
+        });
     }
 
     function treatTextSelection(tabStyle){
-        let selection = window.getSelection();
-        console.log($(selection.anchorNode));
-        let node = selection.anchorNode.nodeType === 3 && !$(selection.getRangeAt(0).startContainer.parentNode).hasClass("editor-body")
-            ? $(selection.getRangeAt(0).startContainer.parentNode) : $(selection.anchorNode);
-        if(node.hasClass("editor-body")) node = currentRange;
-        console.log(node);
 
-        if(node != null && node !== undefined && node.length > 0 && editcontainer.is(node) || node.parents(editcontainer).length > 0) {
+        if(editcontainer.is(":visible")) {
 
-            let selectedText = selection.toString();
-            let fullText = node.text();
+            let selection = window.getSelection();
+            console.log($(selection.anchorNode));
+            let node = selection.anchorNode.nodeType === 3 && !$(selection.getRangeAt(0).startContainer.parentNode).hasClass("editor-body")
+                ? $(selection.getRangeAt(0).startContainer.parentNode) : $(selection.anchorNode);
+            if (node.hasClass("editor-body")) node = currentRange;
+            console.log(node);
 
-            console.log(selection);
+            if (node != null && node !== undefined && node.length > 0 && (node.hasClass("ditor-body") || node.is(""))
+                && editcontainer.is(node) || node.parents(editcontainer).length > 0) {
 
-            console.log(selectedText);
-            console.log(fullText);
+                let selectedText = selection.toString();
+                let fullText = node.text();
 
-            if (fullText !== selectedText) {
-                let startIndex = selection.anchorOffset < selection.focusOffset ? selection.anchorOffset : selection.focusOffset;
-                let endIndex = selection.anchorOffset < selection.focusOffset ? selection.focusOffset : selection.anchorOffset;
+                console.log(selection);
 
-                let newNode = $('<span id="text-box">' + selection + '</span>');
-                node.replaceWith(newNode);
+                console.log(selectedText);
+                console.log(fullText);
 
-                let str_before = fullText.substr(0, startIndex);
-                let str_after = fullText.substr(endIndex);
+                if (fullText !== selectedText) {
+                    let startIndex = selection.anchorOffset < selection.focusOffset ? selection.anchorOffset : selection.focusOffset;
+                    let endIndex = selection.anchorOffset < selection.focusOffset ? selection.focusOffset : selection.anchorOffset;
 
-                if (str_before.length > 0)
-                    newNode.before('<span>' + str_before + '</span>');
-                if (str_after.length > 0)
-                    newNode.after('<span>' + str_after + '</span>');
+                    let newNode = $('<span>' + selection + '</span>');
+                    node.replaceWith(newNode);
 
-                setWindowSelection(newNode, selection);
-                node = newNode;
+                    let str_before = fullText.substr(0, startIndex);
+                    let str_after = fullText.substr(endIndex);
+
+                    if (str_before.length > 0)
+                        newNode.before('<span>' + str_before + '</span>');
+                    if (str_after.length > 0)
+                        newNode.after('<span>' + str_after + '</span>');
+
+                    setWindowSelection(newNode, selection);
+                    node = newNode;
+                }
+
+                recordChange();
+                node.css(tabStyle[0], (checkThatElementHasCssPropertyValue(node, tabStyle[0], tabStyle[1]) ? '' : tabStyle[1]));
             }
 
-            node.css(tabStyle[0], (checkThatElementHasCssPropertyValue(node, tabStyle[0], tabStyle[1]) ? '' : tabStyle[1]));
         }
     }
 
@@ -251,17 +307,17 @@
 
         panel.append(createColorGroup());
 
-        panel.append(createSelect('editor-fonts', eOptions.fonts));
+        panel.append(createSelect('editor-fonts buttons-styles', eOptions.fonts));
 
-        panel.append(createSelect('editor-fontsizes', eOptions.fontsizes));
+        panel.append(createSelect('editor-fontsizes buttons-styles', eOptions.fontsizes));
 
-        panel.append(createBtnDropDown(getMessage("header.label"), 'editor-header', eOptions.headers));
+        panel.append(createBtnDropDown(getMessage("header.label"), 'buttons-styles', 'editor-header', eOptions.headers));
 
         container.append(panel);
     }
 
     function createSaveGroup(){
-        let group = createBtnGroup();
+        let group = createBtnGroup("buttons-settings");
 
         group.append(createPanelBtn('editor-save', '<i class="fas fa-save" style="color : #3b4bc5"></i>'));
 
@@ -271,7 +327,7 @@
     }
 
     function createEditGroup(){
-        let group = createBtnGroup();
+        let group = createBtnGroup("buttons-settings");
 
         group.append(createPanelBtn('editor-undo', '<i class="fas fa-undo"></i>'));
 
@@ -279,11 +335,15 @@
 
         group.append(createPanelBtn('editor-reload', '<i class="fas fa-sync-alt"></i>'));
 
+        group.append(createPanelBtn('editor-code', '<i class="fas fa-code"></i>'));
+
+        group.append(createPanelBtn('editor-classic', '<i class="fas fa-pencil-alt"></i>', true));
+
         return group;
     }
 
     function createFontStyleGroup(){
-        let group = createBtnGroup();
+        let group = createBtnGroup("buttons-styles");
 
         group.append(createPanelBtn('editor-bold', '<b>G</b>'));
 
@@ -295,7 +355,7 @@
     }
 
     function createAlignGroup(){
-        let group = createBtnGroup();
+        let group = createBtnGroup("buttons-styles");
 
         group.append(createPanelBtn('editor-align-left', '<i class="fas fa-align-left"></i>'));
 
@@ -309,7 +369,7 @@
     }
 
     function createColorGroup(){
-        let group = createBtnGroup();
+        let group = createBtnGroup("buttons-styles");
 
         group.append(createPanelBtn('editor-color-background', '<span style="background-color : yellow; padding-left: 5px;  padding-right: 5px">A</span>'));
 
@@ -322,16 +382,17 @@
         return $('<div class="form-group"></div>');
     }
 
-    function createBtnGroup(){
-        return $('<div class="btn-group"></div>');
+    function createBtnGroup(groupClass){
+        return $('<div class="btn-group ' + groupClass + '"></div>');
     }
 
-    function createPanelBtn(btnClass, content){
-        return $('<button type="button" class="btn ' + btnClass + '">' + content + '</button>');
+    function createPanelBtn(btnClass, content, hidden){
+        hidden = hidden || false;
+        return $('<button type="button" class="btn ' + btnClass + '" ' + (hidden ? 'style="display:none;"' : '') + '>' + content + '</button>');
     }
 
-    function createBtnDropDown(title, btnClass, options){
-        let group = createBtnGroup();
+    function createBtnDropDown(title, groupClass, btnClass, options){
+        let group = createBtnGroup(groupClass);
 
         group.append('<button type="button" class="btn">' + title + '</button>');
         group.append('<button type="button" class="btn dropdown-toggle dropdown-toggle-split" data-toggle="dropdown"><span class="caret"></span></button>');
@@ -366,7 +427,10 @@
             '\n' +
             'Si vous aimez la photographie d\'art et l\'esprit zen, jetez un œil sur le site de ce photographe à Palaiseau, en Essonne (France).</div>');
 
+        editcodecontainer = $('<div class="editor-body" contenteditable="true" style="display: none"></div>');
+
         container.append(editcontainer);
+        container.append(editcodecontainer);
     }
 
 
